@@ -26,6 +26,9 @@ type downloader struct {
 func (n *downloader) MarkTaskForDownload(ctx context.Context, task *jobs.Task) error {
 	if task.NotebookTask == nil {
 		return nil
+	} else if task.NotebookTask.Source == jobs.SourceGit {
+		// Git notebooks will not be downloaded
+		return nil
 	}
 
 	return n.markNotebookForDownload(ctx, &task.NotebookTask.NotebookPath)

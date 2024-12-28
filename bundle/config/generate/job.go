@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	jobOrder  = yamlsaver.NewOrder([]string{"name", "job_clusters", "compute", "tasks"})
-	taskOrder = yamlsaver.NewOrder([]string{"task_key", "depends_on", "existing_cluster_id", "new_cluster", "job_cluster_key"})
+	jobOrder  = yamlsaver.NewOrder([]string{"name", "job_clusters", "compute", "tasks", "git_source", "git_provider", "git_url", "git_branch"})
+	taskOrder = yamlsaver.NewOrder([]string{"task_key", "depends_on", "existing_cluster_id", "new_cluster", "job_cluster_key", "notebook_path", "source"})
 )
 
 func ConvertJobToValue(job *jobs.Job) (dyn.Value, error) {

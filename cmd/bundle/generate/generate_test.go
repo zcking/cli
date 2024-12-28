@@ -331,3 +331,100 @@ func TestGenerateJobCommandOldFileRename(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "# Databricks notebook source\nNotebook content", string(data))
 }
+
+func TestGenerateJobWithGitNotebookCommand(t *testing.T) {
+	cmd := NewGenerateJobCommand()
+
+	root := t.TempDir()
+	b := &bundle.Bundle{
+		BundleRootPath: root,
+	}
+
+	m := mocks.NewMockWorkspaceClient(t)
+	b.SetWorkpaceClient(m.WorkspaceClient)
+
+	jobsApi := m.GetMockJobsAPI()
+	jobsApi.EXPECT().Get(mock.Anything, jobs.GetJobRequest{JobId: 1234}).Return(&jobs.Job{
+		Settings: &jobs.JobSettings{
+			Name: "test-job",
+			GitSource: &jobs.GitSource{
+				GitProvider: jobs.GitProviderGitHub,
+				GitUrl:      "https://github.com/databricks/cli.git",
+				GitBranch:   "main",
+			},
+			JobClusters: []jobs.JobCluster{
+				{NewCluster: compute.ClusterSpec{
+					CustomTags: map[string]string{
+						"Tag1": "24X7-1234",
+					},
+				}},
+				{NewCluster: compute.ClusterSpec{
+					SparkConf: map[string]string{
+						"spark.databricks.delta.preview.enabled": "true",
+					},
+				}},
+			},
+			Tasks: []jobs.Task{
+				{
+					TaskKey: "notebook_task",
+					NotebookTask: &jobs.NotebookTask{
+						Source:       jobs.SourceGit,
+						NotebookPath: "test/notebook.py", // Note: does not start with /
+					},
+				},
+			},
+			Parameters: []jobs.JobParameterDefinition{
+				{
+					Name:    "empty",
+					Default: "",
+				},
+			},
+		},
+	}, nil)
+
+	cmd.SetContext(bundle.Context(context.Background(), b))
+	require.NoError(t, cmd.Flag("existing-job-id").Value.Set("1234"))
+
+	configDir := filepath.Join(root, "resources")
+	require.NoError(t, cmd.Flag("config-dir").Value.Set(configDir))
+
+	srcDir := filepath.Join(root, "src")
+	require.NoError(t, cmd.Flag("source-dir").Value.Set(srcDir))
+
+	var key string
+	cmd.Flags().StringVar(&key, "key", "test_job", "")
+
+	err := cmd.RunE(cmd, []string{})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(filepath.Join(configDir, "test_job.job.yml"))
+	require.NoError(t, err)
+
+	require.Equal(t, `resources:
+  jobs:
+    test_job:
+      name: test-job
+      job_clusters:
+        - new_cluster:
+            custom_tags:
+              "Tag1": "24X7-1234"
+        - new_cluster:
+            spark_conf:
+              "spark.databricks.delta.preview.enabled": "true"
+      tasks:
+        - task_key: notebook_task
+          notebook_task:
+            notebook_path: test/notebook.py
+            source: GIT
+      git_source:
+        git_provider: gitHub
+        git_url: https://github.com/databricks/cli.git
+        git_branch: main
+      parameters:
+        - name: empty
+          default: ""
+`, string(data))
+
+	_, err = os.ReadFile(filepath.Join(srcDir, "notebook.py"))
+	require.ErrorContains(t, err, "no such file or directory")
+}
