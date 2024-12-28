@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	jobOrder  = yamlsaver.NewOrder([]string{"name", "job_clusters", "compute", "tasks", "git_source", "git_provider", "git_url", "git_branch"})
-	taskOrder = yamlsaver.NewOrder([]string{"task_key", "depends_on", "existing_cluster_id", "new_cluster", "job_cluster_key", "notebook_path", "source"})
+	jobOrder       = yamlsaver.NewOrder([]string{"name", "job_clusters", "compute", "tasks", "git_source"})
+	taskOrder      = yamlsaver.NewOrder([]string{"task_key", "depends_on", "existing_cluster_id", "new_cluster", "job_cluster_key", "notebook_path", "source"})
+	gitSourceOrder = yamlsaver.NewOrder([]string{"git_provider", "git_url", "git_branch"})
 )
 
 func ConvertJobToValue(job *jobs.Job) (dyn.Value, error) {
@@ -39,6 +40,14 @@ func ConvertJobToValue(job *jobs.Job) (dyn.Value, error) {
 		}
 
 		value["parameters"] = dyn.NewValue(params, []dyn.Location{{Line: jobOrder.Get("parameters")}})
+	}
+
+	if job.Settings.GitSource != nil {
+		v, err := yamlsaver.ConvertToMapValue(job.Settings.GitSource, gitSourceOrder, []string{}, make(map[string]dyn.Value))
+		if err != nil {
+			return dyn.InvalidValue, err
+		}
+		value["git_source"] = v
 	}
 
 	return yamlsaver.ConvertToMapValue(job.Settings, jobOrder, []string{"format", "new_cluster", "existing_cluster_id"}, value)
